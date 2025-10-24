@@ -10,8 +10,10 @@ import json
 import sys
 import subprocess
 
-url_php = "Confidencial"
-base_url = "Confidencial"
+#Parou no dia 5/8
+
+url_php = "https://valedotibagi.com.br/conect-api/TimberFleetPhp.php"
+base_url = "https://multifleet.ponsse.com/api/v1/"
 
 header_php = {
     "Content-Type": "application/json; charset=utf-8"
@@ -44,22 +46,24 @@ campos_referencias = {
     "volume_caixa_carga" : "VOLUME DA CAIXA DE CARGA",
     "tipo_servico" : "TIPO DE SERVIÇO",
     "quantidade_toco" : "QUANTIDADE DE TOCOS",
+    "quantidade_mudas" : "QUANTIDADE DE MUDAS",
     "hectares" : "HECTÁRES",
     "parada" : "CÓDIGO DA PARADA"
 }
 
 end_urls = [
-    "counters?", "forms?", "points?", "notes?", "new_production?", "new_production_products?"
+    #"notes?", "counters?", "forms?", "points?", "new_production?", "new_production_products?"
+    "notes?"
 ]
-#
+
 def criar_token():
-    url_auth = "Confidencial"
+    url_auth = "https://multifleet.ponsse.com/oauth/token"
     payload = {
-        "grant_type": "Confidencial",
-        "username": "Confidencial",
-        "password": "Confidencial",
-        "client_id": "Confidencial",
-        "client_secret": "Confidencial"
+        "grant_type": "password",
+        "username": "integracao.ti@valedotibagi.com.br",
+        "password": "Ctower22**",
+        "client_id": "valetibagi",
+        "client_secret": "b81ce37b19f23713426dd3c03d4e1bfa"
     }
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
@@ -103,7 +107,7 @@ def gerenciar_funcoes():
         data_retornada = verificar_dados_existentes(end_url)
 
         if data_retornada:
-            buscar_dados(data_retornada, end_url)
+            buscar_dados(datetime(2025, 1, 1), end_url)
         else:
             print(f"Não foi possível verificar dados existentes para {end_url}.")
     
@@ -178,6 +182,7 @@ def buscar_dados(data, end_url):
 
         start_date = data_inicial.strftime("%Y-%m-%d 00:00:00")
         end_date = data_inicial.strftime("%Y-%m-%d 23:59:59")
+        print("Data que está fazendo a verificação:", data_inicial)
 
         params = {
             "start_date": start_date,
@@ -186,11 +191,12 @@ def buscar_dados(data, end_url):
 
         try:
             resposta = requests.get(base_url + end_url, headers=headers, params=params, verify=False, allow_redirects=False)
-            print(f"Resposta: {resposta.status_code} - {resposta.text}")
+            print(f"Resposta: {resposta.status_code}")
 
             if resposta.status_code == 200:
                 try:
                     dados = resposta.json()
+
                 except ValueError:
                     print("Erro ao decodificar JSON")
                     continue
@@ -207,17 +213,20 @@ def buscar_dados(data, end_url):
                     df = pd.DataFrame(dados)
 
                     try:
+                        print("Indo tratar os dados recebidos.")
                         dados_tratados = tratar_dados(df, end_url)
                         try:
                             for linha in dados_tratados:
+                                print("Indo criar os jsons formatados.")
                                 json = criar_json(linha, end_url)
                                 json_limpo = limpar_vazios(json)
+
+                                print("Entregando para ser entregue ao php.")
                                 enviar_para_php(json_limpo)
 
                         except Exception as e:
                             print(f"Erro ao criar/enviar JSON: {e}")
                             data_inicial -= timedelta(days=1)
-
                     except Exception as e:
                         print(f"Erro ao tratar: {e}")
                         data_inicial -= timedelta(days=1)
@@ -360,7 +369,7 @@ def dados_formularios(series):
                     nome_possivel = [nome_possivel]
                 
                 if chave in nome_possivel:
-                    if chave in {"informe_producao", "horimetro_motor"}:
+                    if chave in {"informe_producao", "horimetro_motor", "hectares"}:
                         print("Entrou no if do informe_producao")
                         novo_dict[nome_interno] = formatar_valor_float(limpar_valor(valor))
                         break
@@ -376,7 +385,7 @@ def formatar_valor_float(x):
     if x is None:
         return None
     
-    s = str(x).strip().replace('.', '').replace(',', '.')
+    s = str(x).strip().replace('.', '').replace(',', '.').replace('hectares', '').replace('hetares', '').replace('/', '.').replace('m', '').replace('M', '').replace('metros', '').replace('--', '').replace('mts', '')
     try:
         return float(s)
     except:
@@ -395,8 +404,6 @@ def limpar_valor(valor):
     return valor
 
 def criar_json(linha, end_url):
-    print("Criando JSON...")
-    print(linha)
     if end_url == "counters?":
         json_data = {
             "tabela": "TimberFleet_Contadores",
@@ -441,6 +448,7 @@ def criar_json(linha, end_url):
                 "data_registro" : linha['data_registro']
             }
         }
+    
     elif end_url == "forms?":
         json_data = {
             "tabela": "TimberFleet_Formulario",
@@ -497,6 +505,7 @@ def criar_json(linha, end_url):
                 "data_registro" : linha['data_registro']
             }
         }
+    
     elif end_url == "notes?":
         json_data = {
             "tabela": "TimberFleet_Apontamentos",
@@ -532,15 +541,17 @@ def criar_json(linha, end_url):
                 "talhao_operacao" : linha.get('talhao_operacao'),
                 "tipo_produto" : linha.get('tipo_produto'),
                 "quantidade_arvores_cortadas" : linha.get('quantidade_arvores_cortadas'),
-                "informe_producao" : linha.get('informe_producao'),
+                "informe_producao" : formatar_valor_float(limpar_valor(linha.get('informe_producao'))),
                 "volume_caixa_carga" : linha.get('volume_caixa_carga'),
                 "tipo_servico" : linha.get('tipo_servico'),
                 "quantidade_toco" : linha.get('quantidade_toco'),
-                "hectares" : linha.get('hectares'),
+                "quantidade_mudas" : linha.get('quantidade_mudas'),
+                "hectares" : formatar_valor_float(limpar_valor(linha.get('hectares'))),
                 "parada" : linha.get('parada'),
                 "data_registro" : linha['data_registro']
             }
         }
+    
     elif end_url == "new_production?":
         json_data = {
             "tabela": "TimberFleet_Producao",
@@ -555,6 +566,7 @@ def criar_json(linha, end_url):
                 "data_registro" : linha['data_registro']
             }
         }
+    
     elif end_url == "new_production_products?":
         json_data = {
             "tabela": "TimberFleet_Produtos_producao",
@@ -586,8 +598,6 @@ def enviar_para_php(json_data):
         tabela = json_data.get("tabela")
         url_completa = f"{url_php}?tabela={tabela}"
 
-        print(dados)
-
         resposta = requests.post(url_completa, headers=header_php, json=json_data)
 
         if resposta.status_code == 200:
@@ -613,8 +623,8 @@ if __name__ == "__main__":
         end = time.perf_counter()
         print(f"Tempo de execução: {end - start:.2f} segundos")
 
-        subprocess.run(r"Confidencial")
-        sys.exit()
+        #subprocess.run(r"C:\Users\Administrator.VALE\Documents\API's\Executaveis\MultiFleet.exe")
+        #sys.exit()
 
     except Exception as e:
         print(f"Erro durante execução: {e}")
@@ -622,5 +632,5 @@ if __name__ == "__main__":
             print("Token não encontrado, criando um novo token...")
             criar_token()
 
-        subprocess.run(r"Confidencial")
-        sys.exit()
+        #subprocess.run(r"C:\Users\Administrator.VALE\Documents\API's\Executaveis\MultiFleet.exe")
+        #sys.exit()
