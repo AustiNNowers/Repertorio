@@ -3,7 +3,7 @@ using System;
 using System.Text;
 using System.Text.Json;
 
-namespace TF
+namespace TF.Codigos
 {
   class Principal
   {
@@ -11,18 +11,21 @@ namespace TF
     {
       var config = CarregarConfiguracoes();
 
-      Console.WriteLine("Token: " + config.GetProperty("Informacoes_Token").GetProperty("Token").GetString());
+      Requisitor requisitor = new Requisitor(config);
+
+      
     }
 
     //Carregar informações do JSON para fazer as execuções.
     static JsonElement CarregarConfiguracoes()
     {
       string jsonEmTexto = File.ReadAllText("configuracoes.json");
-
       JsonElement json = JsonSerializer.Deserialize<JsonElement>(jsonEmTexto);
 
+      Verificar_Token verificador = new Verificar_Token();
+
       // Verificar se o token do JSON existe e se ainda é valido.
-      if (Verificar_Token.)
+      if (verificador.VerificarToken())
       {
         return json;
       }

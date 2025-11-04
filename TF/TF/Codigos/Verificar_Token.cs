@@ -1,26 +1,22 @@
-using System;
-using System.Text;
 using System.Text.Json;
-using System.Net;
-using System.Net.Http;
-using System.Net.Http.Headers;
+using System.Text.Json.Nodes;
 
-namespace TF
+namespace TF.Codigos
 {
     public class Verificar_Token
     {
         DateTime data_atual = DateTime.Now;
+        
+        private JsonElement json_para_verificar = JsonSerializer.Deserialize<JsonElement>(File.ReadAllText("configuracoes.json"));
 
-        public bool VerificarToken(JsonElement json)
+        public bool VerificarToken()
         {
-            if (json.GetProperty("Informacoes_Token").GetProperty("Token").GetString() == string.Empty)
+            if (
+                json_para_verificar.GetProperty("Informacoes_Token").GetProperty("Token").GetString() == string.Empty ||
+                (data_atual - DateTime.ParseExact(json_para_verificar.GetProperty("Informacoes_Token").GetProperty("Data_Gerada").GetString(), "MM/dd/yyyy HH:mm:ss", null)) > TimeSpan.FromHours(24)
+                )
             {
-                Criar_Token();
-
-                return false;
-            }
-            else if ((DateTime.Parse(json.GetProperty("Informacoes_Token").GetProperty("Data_Gerada").GetString()) - data_atual) > TimeSpan.FromHours(24)) {
-                Criar_Token();
+                Criar_Token(json_para_verificar);
 
                 return false;
             }
@@ -30,21 +26,41 @@ namespace TF
             }
         }
 
-        private void Criar_Token()
+        private static void Criar_Token(JsonElement json)
         {
-            string jsonEmTexto = File.ReadAllText("configuracoes.json");
-            JsonElement json = JsonSerializer.Deserialize<JsonElement>(jsonEmTexto);
-
-            var json_envio = json.GetProperty("Credeciais");
-            var content = new StringContent(jsonEmTexto, Encoding.UTF8, json.GetProperty("TF_Token_header").GetProperty("Content-Type").GetString());
+            var credenciais = JsonSerializer.Deserialize<Dictionary<string, string>>(json.GetProperty("Credenciais").GetRawText());
+            var content = new FormUrlEncodedContent(credenciais);
             var cliente = new HttpClient();
 
-            var resposta = cliente.PostAsync(json.GetProperty("TF_Token_Url").GetString(), content);
+            var requisicao = new HttpRequestMessage(HttpMethod.Post, json.GetProperty("TF_Token_Url").GetString());
 
-            if (resposta.IsCompletedSuccessfully)
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(json.GetProperty("TF_Token_header").GetProperty("Content-Type").GetString());
+            requisicao.Content = content;
+
+            Console.WriteLine("Enviando requisição para gerar novo token...");
+            Console.WriteLine("URL: " + json.GetProperty("TF_Token_Url").GetString());
+            Console.WriteLine("Corpo da requisição: " + credenciais);
+            Console.WriteLine("Headers da requisição: " + content.Headers.ToString());
+
+            var resposta = cliente.Send(requisicao);
+
+            if (resposta.IsSuccessStatusCode)
             {
-                Console.WriteLine("Status: " + resposta.Status);
-                Console.WriteLine("Resposta dada: " + resposta.Result.ToString());
+                Console.WriteLine("Status: " + resposta.StatusCode);
+
+                JsonNode atualizar_json = JsonNode.Parse(File.ReadAllText("configuracoes.json"));
+                var resposta_json = JsonNode.Parse(resposta.Content.ReadAsStringAsync().Result);
+
+                atualizar_json["Informacoes_Token"]["Token"] = resposta_json["access_token"].ToString();
+                atualizar_json["Informacoes_Token"]["Data_Gerada"] = DateTime.Now.ToString("MM/dd/yyyy HH:mm:ss");
+
+                File.WriteAllText("configuracoes.json", atualizar_json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+            
+                Console.WriteLine("Novo token gerado e salvo no arquivo de configurações.");
+            } else
+            {
+                Console.WriteLine("Status: " + resposta.StatusCode);
+                Console.WriteLine("Resposta dada: " + resposta.Content.ReadAsStringAsync().Result);
             }
         }
     }

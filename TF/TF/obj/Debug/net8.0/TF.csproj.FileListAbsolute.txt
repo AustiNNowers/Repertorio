@@ -24,3 +24,4 @@ C:\Users\LUIS.BRANCO\TimberFleet Reformulado\TF\TF\obj\Debug\net8.0\TF.pdb
 C:\Users\LUIS.BRANCO\TimberFleet Reformulado\TF\TF\obj\Debug\net8.0\TF.genruntimeconfig.cache
 C:\Users\LUIS.BRANCO\TimberFleet Reformulado\TF\TF\obj\Debug\net8.0\ref\TF.dll
 C:\Users\LUIS.BRANCO\TimberFleet Reformulado\TF\TF\bin\Debug\net8.0\configuracoes.json
+C:\Users\LUIS.BRANCO\TimberFleet Reformulado\TF\TF\obj\Debug\net8.0\TF.csproj.AssemblyReference.cache
